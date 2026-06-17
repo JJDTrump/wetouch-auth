@@ -9,36 +9,31 @@ on:
         description: 'Unique request ID'
         required: true
       captchaToken:
-        description: 'reCAPTCHA token (for send-otp)'
+        description: 'reCAPTCHA token'
         required: false
         default: ''
       otpCode:
-        description: 'OTP code (for verify-otp)'
+        description: 'OTP code'
         required: false
         default: ''
-
-permissions:
-  contents: write
 
 jobs:
   proxy:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Call WeTouch API
+      - name: Call WeTouch API and save to Gist
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           WT_TOKEN: "9fa96a55ceb8d6c9160abcd74e1f62e7"
+          EVENT: ${{ inputs.event }}
+          REQ_ID: ${{ inputs.requestId }}
+          CAPTCHA: ${{ inputs.captchaToken }}
+          OTP: ${{ inputs.otpCode }}
         run: |
-          EVENT="${{ inputs.event }}"
-          REQ_ID="${{ inputs.requestId }}"
-          
           if [ "$EVENT" = "send-otp" ]; then
-            CAPTCHA="${{ inputs.captchaToken }}"
             BODY="event=sendCode&from=register&countryCode=852&number=59144693&captchaToken=${CAPTCHA}"
           else
-            OTP="${{ inputs.otpCode }}"
             BODY="event=chkCode&from=register&code=${OTP}&mobile=85259144693"
           fi
           
@@ -50,12 +45,17 @@ jobs:
             -H "User-Agent: okhttp/4.9.3" \
             -d "${BODY}")
           
-          echo "API Result: $RESULT"
-          mkdir -p results
-          echo "$RESULT" > "results/${REQ_ID}.json"
+          echo "WeTouch API Result: $RESULT"
           
-          git config user.email "action@github.com"
-          git config user.name "GitHub Action"
-          git add "results/${REQ_ID}.json"
-          git commit -m "result:${REQ_ID}" || true
-          git push
+          # Save to GitHub Gist (public, no auth needed to read)
+          GIST_PAYLOAD=$(python3 -c "
+import json, os
+result = os.environ.get('RESULT', '')
+req_id = os.environ.get('REQ_ID', '')
+print(json.dumps({'description': 'wt-result-' + req_id, 'public': True, 'files': {req_id + '.json': {'content': result or 'empty'}}}))
+          " RESULT="$RESULT")
+          
+          curl -sk -X POST "https://api.github.com/gists" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -d "$GIST_PAYLOAD" | python3 -c "import sys,json; d=json.load(sys.stdin); print('Gist URL:', d.get('html_url','error'), 'Raw:', list(d.get('files',{}).values())[0].get('raw_url','') if d.get('files') else 'none')"

@@ -1,7 +1,21 @@
 name: WeTouch Proxy
 on:
-  repository_dispatch:
-    types: [send-otp, verify-otp]
+  workflow_dispatch:
+    inputs:
+      event:
+        description: 'send-otp or verify-otp'
+        required: true
+      requestId:
+        description: 'Unique request ID'
+        required: true
+      captchaToken:
+        description: 'reCAPTCHA token (for send-otp)'
+        required: false
+        default: ''
+      otpCode:
+        description: 'OTP code (for verify-otp)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -15,23 +29,23 @@ jobs:
 
       - name: Call WeTouch API
         env:
-          EVENT: ${{ github.event.action }}
-          REQ_ID: ${{ github.event.client_payload.requestId }}
-          CAPTCHA: ${{ github.event.client_payload.captchaToken }}
-          OTP: ${{ github.event.client_payload.otpCode }}
+          WT_TOKEN: "9fa96a55ceb8d6c9160abcd74e1f62e7"
         run: |
-          TOKEN="9fa96a55ceb8d6c9160abcd74e1f62e7"
+          EVENT="${{ inputs.event }}"
+          REQ_ID="${{ inputs.requestId }}"
           
           if [ "$EVENT" = "send-otp" ]; then
+            CAPTCHA="${{ inputs.captchaToken }}"
             BODY="event=sendCode&from=register&countryCode=852&number=59144693&captchaToken=${CAPTCHA}"
           else
+            OTP="${{ inputs.otpCode }}"
             BODY="event=chkCode&from=register&code=${OTP}&mobile=85259144693"
           fi
           
           RESULT=$(curl -sk --connect-timeout 20 \
             -X POST "https://api.wetouch.me/file/setMobile.php" \
             -H "VERSION: 707" -H "DEVICE: android" -H "PHONEIMEI: 123456789012345" \
-            -H "LOCALE: en" -H "TOKEN: ${TOKEN}" \
+            -H "LOCALE: en" -H "TOKEN: ${WT_TOKEN}" \
             -H "Content-Type: application/x-www-form-urlencoded" \
             -H "User-Agent: okhttp/4.9.3" \
             -d "${BODY}")
@@ -43,5 +57,5 @@ jobs:
           git config user.email "action@github.com"
           git config user.name "GitHub Action"
           git add "results/${REQ_ID}.json"
-          git commit -m "result:${REQ_ID}"
+          git commit -m "result:${REQ_ID}" || true
           git push

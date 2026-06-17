@@ -100,38 +100,26 @@ function ss(id, msg, c) {
   e.className = 'st ' + c;
 }
 
-// Step 0: Activate cors-anywhere demo (via iframe visit to /corsdemo)
+// Step 0: Activate cors-anywhere demo by opening /corsdemo popup
 async function doStep0() {
-  const btn = document.getElementById('btn0');
-  btn.disabled = true;
-  ss('st0', 'Activating proxy...', 'wn');
-
-  // Visit corsdemo in iframe to activate for this IP
-  try {
-    // Load /corsdemo page first
-    const r1 = await fetch(PROXY + 'https://example.com', {
-      method: 'GET',
-      headers: {'X-Requested-With': 'XMLHttpRequest'}
-    });
-    const t1 = await r1.text();
-    if (t1.includes('too many') || t1.includes('rate')) {
-      ss('st0', 'Rate limited — wait 1 min then retry', 'er');
-      btn.disabled = false;
-      return;
-    }
-    ss('st0', 'Proxy active ✓', 'ok');
-    setTimeout(() => show('s1'), 1000);
-  } catch(e) {
-    // Check if it's just CORS (meaning proxy is accessible)
-    if (e.message && (e.message.includes('CORS') || e.message.includes('Failed'))) {
-      // Proxy is accessible, CORS is expected for cross-origin
-      ss('st0', 'Proxy ready ✓', 'ok');
-      setTimeout(() => show('s1'), 1000);
-    } else {
-      ss('st0', 'Error: ' + e.message, 'er');
-      btn.disabled = false;
-    }
+  ss('st0', 'Opening activation page — click the button there, then come back here', 'wn');
+  // Open /corsdemo in a new tab so user can click the activation button
+  const popup = window.open('https://cors-anywhere.herokuapp.com/corsdemo', '_blank');
+  if (!popup) {
+    ss('st0', 'Popup blocked — tap this link manually: cors-anywhere.herokuapp.com/corsdemo — then tap "Done"', 'wn');
   }
+  // Show a "Done" button for user to confirm they clicked it
+  const card = document.getElementById('st0').parentElement;
+  const doneBtn = document.createElement('button');
+  doneBtn.textContent = '✓ I clicked it — CONTINUE';
+  doneBtn.className = 'warn';
+  doneBtn.style.marginTop = '8px';
+  doneBtn.onclick = () => {
+    doneBtn.remove();
+    ss('st0', 'Proxy activated ✓', 'ok');
+    setTimeout(() => show('s1'), 800);
+  };
+  card.appendChild(doneBtn);
 }
 
 async function getRC(action) {

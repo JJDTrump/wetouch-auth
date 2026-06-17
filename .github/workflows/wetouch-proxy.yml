@@ -1,0 +1,49 @@
+name: WeTouch Proxy
+on:
+  repository_dispatch:
+    types: [send-otp, verify-otp]
+
+permissions:
+  contents: write
+
+jobs:
+  proxy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Call WeTouch API
+        run: |
+          TOKEN="9fa96a55ceb8d6c9160abcd74e1f62e7"
+          EVENT="${{ github.event.action }}"
+          REQ_ID="${{ github.event.client_payload.requestId }}"
+          
+          if [ "$EVENT" = "send-otp" ]; then
+            CAPTCHA="${{ github.event.client_payload.captchaToken }}"
+            BODY="event=sendCode&from=register&countryCode=852&number=59144693&captchaToken=$(python3 -c "import urllib.parse,os; print(urllib.parse.quote(os.environ.get('CAPTCHA','')))" CAPTCHA="$CAPTCHA")"
+            URL="https://api.wetouch.me/file/setMobile.php"
+          else
+            OTP="${{ github.event.client_payload.otpCode }}"
+            BODY="event=chkCode&from=register&code=${OTP}&mobile=85259144693"
+            URL="https://api.wetouch.me/file/setMobile.php"
+          fi
+          
+          RESULT=$(curl -sk --connect-timeout 20 \
+            -X POST "$URL" \
+            -H "VERSION: 707" -H "DEVICE: android" -H "PHONEIMEI: 123456789012345" \
+            -H "LOCALE: en" -H "TOKEN: ${TOKEN}" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -H "User-Agent: okhttp/4.9.3" \
+            --data-urlencode "" \
+            -d "${BODY}")
+          
+          echo "API Result: $RESULT"
+          mkdir -p results
+          echo "$RESULT" > "results/${REQ_ID}.json"
+          
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
+          git add "results/${REQ_ID}.json"
+          git commit -m "result:${REQ_ID}"
+          git push
